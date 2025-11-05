@@ -22,15 +22,32 @@ A powerful command-line research assistant that uses Retrieval-Augmented Generat
 
 ## Installation
 
-1. Clone the repository:
+### Option 1: Install with pip (Recommended)
+
 ```bash
 git clone https://github.com/jorgebjr28/research-assistant.git
 cd research-assistant
+pip install -e .
 ```
 
-2. Install dependencies:
+After installation, you can use the `research-assistant` command directly:
 ```bash
+research-assistant ingest document.txt
+research-assistant query "your topic"
+```
+
+### Option 2: Install dependencies only
+
+```bash
+git clone https://github.com/jorgebjr28/research-assistant.git
+cd research-assistant
 pip install -r requirements.txt
+```
+
+Then use the script directly:
+```bash
+python research_assistant.py ingest document.txt
+python research_assistant.py query "your topic"
 ```
 
 ## Usage
@@ -83,18 +100,34 @@ Or skip the confirmation prompt:
 python research_assistant.py clear --force
 ```
 
+## Quick Start Demo
+
+Run the included example script to see the research assistant in action:
+
+```bash
+./example_usage.sh
+```
+
+This will demonstrate the complete workflow: ingesting documents, querying topics, and viewing results with citations.
+
 ## Example Workflow
 
 ```bash
-# 1. Ingest some research sources
+# Set environment variable for offline mode (optional)
+export USE_SENTENCE_TRANSFORMERS=false
+
+# 1. Ingest some research sources (local files or URLs)
 python research_assistant.py ingest \
-  https://en.wikipedia.org/wiki/Artificial_intelligence \
-  https://en.wikipedia.org/wiki/Machine_learning
+  /path/to/document1.txt \
+  /path/to/document2.pdf
 
 # 2. Query on a topic
 python research_assistant.py query "What is artificial intelligence?" --num-sources 3
 
-# 3. Check statistics
+# 3. Query with detailed excerpts
+python research_assistant.py query "machine learning applications" --show-excerpts
+
+# 4. Check statistics
 python research_assistant.py stats
 ```
 
@@ -138,6 +171,27 @@ research-assistant/
 ## Configuration
 
 The vector database is stored in `./faiss_index` by default. This directory is created automatically and persists between sessions.
+
+### Environment Variables
+
+- `USE_SENTENCE_TRANSFORMERS`: Set to `false` to use TF-IDF embeddings instead of Sentence Transformers (useful for offline environments or when HuggingFace models aren't available)
+
+```bash
+export USE_SENTENCE_TRANSFORMERS=false
+```
+
+### Embedding Models
+
+The system supports two embedding approaches:
+
+1. **Sentence Transformers** (default): Uses the `all-MiniLM-L6-v2` model for high-quality embeddings
+   - Requires internet connection on first use to download model
+   - Provides better semantic understanding
+
+2. **TF-IDF** (fallback): Uses sklearn's TfidfVectorizer
+   - Works completely offline
+   - No model downloads required
+   - Good for keyword-based retrieval
 
 ## Error Handling
 
