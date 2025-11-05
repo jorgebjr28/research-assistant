@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  research-assistant:
+    build: .
+    image: research-assistant:latest
+    container_name: research-assistant
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-3.5-turbo}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-ada-002}
+      - CHROMA_DB_PATH=/app/data/chroma_db
+      - COLLECTION_NAME=${COLLECTION_NAME:-research_docs}
+      - CHUNK_SIZE=${CHUNK_SIZE:-1000}
+      - CHUNK_OVERLAP=${CHUNK_OVERLAP:-200}
+      - TOP_K_RESULTS=${TOP_K_RESULTS:-5}
+      - TEMPERATURE=${TEMPERATURE:-0.3}
+    volumes:
+      - ./data:/app/data
+      - ./pdfs:/app/pdfs
+    stdin_open: true
+    tty: true
