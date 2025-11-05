@@ -9,7 +9,6 @@ openai>=1.12.0
 beautifulsoup4>=4.12.0
 requests>=2.31.0
 pypdf>=3.17.0
-pypdf2>=3.0.1
 
 # Utilities
 python-dotenv>=1.0.0

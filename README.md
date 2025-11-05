@@ -12,6 +12,8 @@ A powerful research assistant that uses Retrieval-Augmented Generation (RAG) to 
 - 💻 **CLI Interface**: Easy-to-use command-line interface
 - 🐳 **Docker Support**: Containerized deployment ready
 
+📋 See [FEATURES.md](FEATURES.md) for a complete list of 50+ features.
+
 ## Installation
 
 ### Local Installation

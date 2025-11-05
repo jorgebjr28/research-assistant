@@ -27,7 +27,6 @@ setup(
         "beautifulsoup4>=4.12.0",
         "requests>=2.31.0",
         "pypdf>=3.17.0",
-        "pypdf2>=3.0.1",
         "python-dotenv>=1.0.0",
         "pydantic>=2.0.0",
         "tiktoken>=0.5.2",
