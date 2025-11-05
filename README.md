@@ -5,7 +5,7 @@ A powerful command-line research assistant that uses Retrieval-Augmented Generat
 ## Features
 
 - 📚 **Multi-Source Ingestion**: Load documents from web pages (HTML) and PDFs
-- 🔍 **Vector Database**: Efficient storage and retrieval using ChromaDB
+- 🔍 **Vector Database**: Efficient storage and retrieval using FAISS
 - 🤖 **RAG Pipeline**: Retrieve relevant sources and synthesize summaries
 - 📝 **Citation-Aware**: Automatic citation generation with source tracking
 - 📖 **Excerpt Extraction**: Pull relevant excerpts from source materials
@@ -42,6 +42,9 @@ research-assistant query "your topic"
 git clone https://github.com/jorgebjr28/research-assistant.git
 cd research-assistant
 pip install -r requirements.txt
+
+# Optional: Install sentence-transformers for better embeddings
+pip install sentence-transformers>=2.0.0
 ```
 
 Then use the script directly:
@@ -160,7 +163,7 @@ research-assistant/
 │   └── research_assistant/
 │       ├── __init__.py
 │       ├── document_loader.py    # Load web pages and PDFs
-│       ├── vector_store.py       # ChromaDB vector database
+│       ├── vector_store.py       # FAISS vector database
 │       ├── rag_pipeline.py       # RAG pipeline with citations
 │       └── cli.py                # Command-line interface
 ├── research_assistant.py         # Main entry point
