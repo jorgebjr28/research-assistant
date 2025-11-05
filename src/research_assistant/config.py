@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -50,6 +50,8 @@ class Config(BaseModel):
         default_factory=lambda: float(os.getenv("TEMPERATURE", "0.3"))
     )
     
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
     def validate_config(self) -> bool:
         """Validate that required configuration is present."""
         if not self.openai_api_key:
@@ -57,10 +59,6 @@ class Config(BaseModel):
                 "OPENAI_API_KEY is required. Set it in .env file or environment variable."
             )
         return True
-    
-    class Config:
-        """Pydantic config."""
-        arbitrary_types_allowed = True
 
 
 def get_config() -> Config:

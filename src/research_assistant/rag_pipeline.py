@@ -3,8 +3,8 @@
 import logging
 from typing import List, Dict, Any, Optional
 from langchain_openai import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate
-from langchain.schema import HumanMessage, SystemMessage
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from .config import Config
 from .vector_store import VectorStore
