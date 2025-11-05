@@ -41,6 +41,8 @@ Thumbs.db
 chroma_db/
 faiss_index/
 *.index
+*.faiss
+*.pkl
 
 # Data
 data/

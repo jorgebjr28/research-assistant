@@ -14,8 +14,7 @@ A powerful command-line research assistant that uses Retrieval-Augmented Generat
 ## Technology Stack
 
 - **Python 3.8+**
-- **LangChain**: For RAG pipeline components
-- **ChromaDB**: Vector database for document storage
+- **FAISS**: Fast vector similarity search for document retrieval
 - **Sentence Transformers**: For generating embeddings
 - **BeautifulSoup4**: Web scraping and HTML parsing
 - **PyPDF**: PDF document parsing
@@ -108,7 +107,7 @@ python research_assistant.py stats
 
 2. **Vector Storage**:
    - Text chunks are embedded using Sentence Transformers
-   - Embeddings are stored in ChromaDB with metadata (source, title, type)
+   - Embeddings are stored in FAISS index with metadata (source, title, type)
 
 3. **Retrieval**:
    - User queries are embedded using the same model
@@ -138,7 +137,7 @@ research-assistant/
 
 ## Configuration
 
-The vector database is stored in `./chroma_db` by default. This directory is created automatically and persists between sessions.
+The vector database is stored in `./faiss_index` by default. This directory is created automatically and persists between sessions.
 
 ## Error Handling
 

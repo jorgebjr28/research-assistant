@@ -1,16 +1,17 @@
-"""Vector store management using ChromaDB."""
+"""Vector store management using FAISS."""
 
-import chromadb
-from chromadb.config import Settings
-from typing import List, Dict, Any, Optional
-from sentence_transformers import SentenceTransformer
+import faiss
+import numpy as np
+import pickle
 import os
+from typing import List, Dict, Any, Optional
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 
 class VectorStore:
     """Manages vector database for document storage and retrieval."""
 
-    def __init__(self, persist_directory: str = "./chroma_db"):
+    def __init__(self, persist_directory: str = "./faiss_index"):
         """
         Initialize the vector store.
         
@@ -18,24 +19,64 @@ class VectorStore:
             persist_directory: Directory to persist the database
         """
         self.persist_directory = persist_directory
+        os.makedirs(persist_directory, exist_ok=True)
         
-        # Initialize ChromaDB client
-        self.client = chromadb.Client(Settings(
-            persist_directory=persist_directory,
-            anonymized_telemetry=False
-        ))
+        # File paths
+        self.index_file = os.path.join(persist_directory, "index.faiss")
+        self.metadata_file = os.path.join(persist_directory, "metadata.pkl")
         
-        # Initialize embedding model
-        self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+        # Initialize embedding model - Try sentence-transformers, fall back to TF-IDF
+        self.use_tfidf = False
+        self.embedding_model = None
         
-        # Get or create collection
-        try:
-            self.collection = self.client.get_collection("research_documents")
-        except:
-            self.collection = self.client.create_collection(
-                name="research_documents",
-                metadata={"description": "Research documents with citations"}
-            )
+        # Check if we should skip sentence-transformers (e.g., in offline environments)
+        use_st = os.environ.get('USE_SENTENCE_TRANSFORMERS', 'auto').lower()
+        
+        if use_st != 'false':
+            try:
+                # Set timeout for HuggingFace downloads
+                os.environ['HF_HUB_DOWNLOAD_TIMEOUT'] = '10'
+                
+                from sentence_transformers import SentenceTransformer
+                self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+                self.dimension = 384  # Dimension for all-MiniLM-L6-v2
+            except Exception as e:
+                # Fallback to TF-IDF
+                if use_st == 'auto':
+                    print("Note: Using TF-IDF for embeddings (SentenceTransformers unavailable)")
+                    self._init_tfidf()
+                else:
+                    raise
+        else:
+            # Explicitly use TF-IDF
+            self._init_tfidf()
+        
+        # Initialize or load index
+        if os.path.exists(self.index_file) and os.path.exists(self.metadata_file):
+            self.index = faiss.read_index(self.index_file)
+            with open(self.metadata_file, 'rb') as f:
+                data = pickle.load(f)
+                self.documents = data['documents']
+                self.metadatas = data['metadatas']
+                self.ids = data['ids']
+                if 'use_tfidf' in data:
+                    self.use_tfidf = data['use_tfidf']
+                    if self.use_tfidf and 'vectorizer' in data:
+                        self.vectorizer = data['vectorizer']
+                        self.dimension = data['dimension']
+                        self.tfidf_fitted = True
+        else:
+            self.index = faiss.IndexFlatL2(self.dimension)
+            self.documents = []
+            self.metadatas = []
+            self.ids = []
+    
+    def _init_tfidf(self):
+        """Initialize TF-IDF vectorizer as fallback."""
+        self.vectorizer = TfidfVectorizer(max_features=384, stop_words='english')
+        self.dimension = 384
+        self.use_tfidf = True
+        self.tfidf_fitted = False
 
     def _chunk_text(self, text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
         """
@@ -83,12 +124,14 @@ class VectorStore:
         all_metadatas = []
         all_ids = []
         
+        base_idx = len(self.documents)
+        
         for doc_idx, doc in enumerate(documents):
             content = doc['content']
             chunks = self._chunk_text(content)
             
             for chunk_idx, chunk in enumerate(chunks):
-                chunk_id = f"doc_{doc_idx}_chunk_{chunk_idx}"
+                chunk_id = f"doc_{base_idx + doc_idx}_chunk_{chunk_idx}"
                 all_chunks.append(chunk)
                 all_ids.append(chunk_id)
                 all_metadatas.append({
@@ -101,15 +144,41 @@ class VectorStore:
         
         if all_chunks:
             # Generate embeddings
-            embeddings = self.embedding_model.encode(all_chunks).tolist()
+            if self.use_tfidf:
+                # Fit vectorizer on all documents (first time or refit)
+                all_docs = self.documents + all_chunks
+                tfidf_matrix = self.vectorizer.fit_transform(all_docs)
+                self.tfidf_fitted = True
+                
+                # Update dimension if it changed
+                new_dimension = tfidf_matrix.shape[1]
+                if new_dimension != self.dimension:
+                    self.dimension = new_dimension
+                    self.index = faiss.IndexFlatL2(self.dimension)
+                
+                # Get embeddings for new chunks
+                start_idx = len(self.documents)
+                embeddings_np = tfidf_matrix[start_idx:].toarray().astype('float32')
+                
+                # Re-index ALL documents with new vectorizer (to ensure consistency)
+                if len(self.documents) > 0:
+                    old_embeddings = tfidf_matrix[:start_idx].toarray().astype('float32')
+                    self.index = faiss.IndexFlatL2(self.dimension)
+                    self.index.add(old_embeddings)
+            else:
+                embeddings = self.embedding_model.encode(all_chunks)
+                embeddings_np = np.array(embeddings).astype('float32')
             
-            # Add to collection
-            self.collection.add(
-                documents=all_chunks,
-                embeddings=embeddings,
-                metadatas=all_metadatas,
-                ids=all_ids
-            )
+            # Add to index
+            self.index.add(embeddings_np)
+            
+            # Store documents and metadata
+            self.documents.extend(all_chunks)
+            self.metadatas.extend(all_metadatas)
+            self.ids.extend(all_ids)
+            
+            # Persist
+            self._save()
 
     def query(self, query_text: str, n_results: int = 5) -> List[Dict[str, Any]]:
         """
@@ -122,41 +191,62 @@ class VectorStore:
         Returns:
             List of retrieved documents with metadata
         """
-        # Generate query embedding
-        query_embedding = self.embedding_model.encode([query_text]).tolist()
+        if self.index.ntotal == 0:
+            return []
         
-        # Query the collection
-        results = self.collection.query(
-            query_embeddings=query_embedding,
-            n_results=n_results
-        )
+        # Generate query embedding
+        if self.use_tfidf:
+            if not self.tfidf_fitted:
+                return []
+            query_vec = self.vectorizer.transform([query_text]).toarray().astype('float32')
+        else:
+            query_embedding = self.embedding_model.encode([query_text])
+            query_vec = np.array(query_embedding).astype('float32')
+        
+        # Search the index
+        k = min(n_results, self.index.ntotal)
+        distances, indices = self.index.search(query_vec, k)
         
         # Format results
         retrieved_docs = []
-        if results['documents'] and len(results['documents']) > 0:
-            for i in range(len(results['documents'][0])):
+        for i, idx in enumerate(indices[0]):
+            if idx < len(self.documents):
                 retrieved_docs.append({
-                    'content': results['documents'][0][i],
-                    'metadata': results['metadatas'][0][i] if results['metadatas'] else {},
-                    'distance': results['distances'][0][i] if results['distances'] else None,
-                    'id': results['ids'][0][i] if results['ids'] else None
+                    'content': self.documents[idx],
+                    'metadata': self.metadatas[idx],
+                    'distance': float(distances[0][i]),
+                    'id': self.ids[idx]
                 })
         
         return retrieved_docs
 
+    def _save(self) -> None:
+        """Save the index and metadata to disk."""
+        faiss.write_index(self.index, self.index_file)
+        data = {
+            'documents': self.documents,
+            'metadatas': self.metadatas,
+            'ids': self.ids,
+            'use_tfidf': self.use_tfidf,
+            'dimension': self.dimension
+        }
+        if self.use_tfidf:
+            data['vectorizer'] = self.vectorizer
+        
+        with open(self.metadata_file, 'wb') as f:
+            pickle.dump(data, f)
+
     def clear(self) -> None:
         """Clear all documents from the vector store."""
-        # Delete and recreate collection
-        self.client.delete_collection("research_documents")
-        self.collection = self.client.create_collection(
-            name="research_documents",
-            metadata={"description": "Research documents with citations"}
-        )
+        self.index = faiss.IndexFlatL2(self.dimension)
+        self.documents = []
+        self.metadatas = []
+        self.ids = []
+        self._save()
 
     def get_stats(self) -> Dict[str, Any]:
         """Get statistics about the vector store."""
-        count = self.collection.count()
         return {
-            'total_chunks': count,
+            'total_chunks': self.index.ntotal,
             'persist_directory': self.persist_directory
         }
